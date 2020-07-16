@@ -12,7 +12,8 @@
 
 using namespace std;
 
-//####################################################################
+namespace DM{
+
 //####################################################################
 
 template<typename S>
@@ -25,13 +26,12 @@ std::tuple<S, Args...> mkTuple(S s, Args... args){
 	return std::tuple_cat(std::make_tuple(s), mkTuple(args...));
 }
 
-
 //####################################################################
 
 template<typename Tuple, std::size_t N, std::size_t B>
 struct TtoV
 {
-	inline static void test(void** vx, Tuple& tuple){
+	static void test(void** vx, Tuple& tuple){
 		vx[N-1]=&std::get<N-1>(tuple);
 		TtoV<Tuple, N+1, B>::test(vx, tuple);
 	}
@@ -40,13 +40,13 @@ struct TtoV
 template<typename Tuple, std::size_t B>
 struct TtoV<Tuple, B, B>
 {
-	inline static bool test(void** vx, Tuple& tuple){
+	static void test(void** vx, Tuple& tuple){
 		vx[B-1]=&std::get<B-1>(tuple);
 	}
 };
-	
+
 template<typename Tuple>
-void** TupleToArray(Tuple& tuple) 
+void** TupleToArray(Tuple& tuple)
 {
 	void** vx=new void*[std::tuple_size<Tuple>::value];
 	TtoV<Tuple, 1, std::tuple_size<Tuple>::value>::test(vx, tuple);
@@ -64,7 +64,7 @@ bool pTest(T D::* t, S D::* s){
 		}
 	}
 	return false;
-}	
+}
 
 //====================================================================
 
@@ -73,16 +73,18 @@ class Keyx
 {
 	public:
 		virtual bool testing(const T& x, const T& y)=0;
-		virtual bool testing(T* x, T* y)=0;
+		virtual bool testing(T*& x, T*& y)=0;
 
 		virtual bool testing(const T& x, void* y)=0;
 		virtual bool testing(void* y, const T& x)=0;
 
-		virtual bool testing(T* x, void* y)=0;
-		virtual bool testing(void* y, T* x)=0;
+		virtual bool testing(T*& x, void*& y)=0;
+		virtual bool testing(void*& y, T*& x)=0;
 		virtual bool sameField(void* data)=0;
 };
 
+//====================================================================
+//====================================================================
 //====================================================================
 
 template<typename S, typename T>
@@ -101,36 +103,40 @@ class KeyP : public Keyx<T>
 
 		S T::* returnKey(){
 			return field;
-		}			
+		}
 
 		virtual bool testing(const T& x, const T& y){
 			return (x.*field < y.*field);
 		}
 
-		virtual bool testing(T* x, T* y){
-			return testing(*x, *y);
+		virtual bool testing(T*& x, T*& y){
+			return (x->*field < y->*field);
 		}
-		
+
 		virtual bool testing(const T& x, void* y){
 			return (x.*field < *(static_cast<S*>(y)));
 		};
+
 		virtual bool testing(void* y, const T& x){
 			return (*(static_cast<S*>(y)) < x.*field);
 		};
-		
-		virtual bool testing(T* x, void* y){
-			return testing(*x, y);
+
+		virtual bool testing(T*& x, void*& y){
+			return (x->*field < *(static_cast<S*>(y)));
 		};
-		virtual bool testing(void* y, T* x){
-			return testing(y, *x);
+
+		virtual bool testing(void*& y, T*& x){
+			return (*(static_cast<S*>(y)) < x->*field);
 		};
-		
+
 		bool sameField(void* data){
 			auto tt=reinterpret_cast<KyP*>(data);
-			return pTest(field, tt->returnKey());		
+			return pTest(field, tt->returnKey());
 		}
 };
 
+//====================================================================
+//====================================================================
 //====================================================================
 
 template<typename T>
@@ -145,13 +151,13 @@ class KeyCompound
 		~KeyCompound(){
 			for(int i=0; i<count; i++){
 				delete keys[i];
-			}		
+			}
 		}
 
 		KeyCompound()
 			:count(0){}
 
-		inline int length() const{
+		int length() const{
 			return count;
 		}
 
@@ -163,60 +169,48 @@ class KeyCompound
 		}
 
 		bool compare(const T& x, const T& y, int deep){
-			if(keys[deep]->testing(x, y)){
-				return true;
-			}
-			return false;
+			return keys[deep]->testing(x, y);
 		}
 
 		bool compare(T* x, T* y, int deep){
-			compare(*x, *y, deep);
-		}
-
-		//template<typename... Args>
-		bool compare(const T& x, void** vd, int deep){
-			if(keys[deep]->testing(x, vd[deep])){
-				return true;
-			}
-			return false;
-		}
-
-		//template<typename... Args>
-		bool compare(T* x,  void** vd, int deep){
-			return compare(*x, vd, deep);
-		}
-		
-		//template<typename... Args>
-		bool compare(void** vd, const T& x, int deep){
-			if(keys[deep]->testing(vd[deep], x)){
-				return true;
-			}
-			return false;
-		}
-
-		//template<typename... Args>
-		bool compare(void** vd, T* x, int deep){
-			return compare(vd, *x, deep);
-		}
-		
-		template<typename S>
-		bool compare(const T& x, S s, int deep){
-			S sx=s;
-			void* y=&sx;
 			return keys[deep]->testing(x, y);
 		}
+
+		bool compare(const T& x, void** vd, int deep){
+			return keys[deep]->testing(x, vd[deep]);
+		}
+
+		bool compare(T* x,  void** vd, int deep){
+			return keys[deep]->testing(x, vd[deep]);
+		}
+
+		bool compare(void** vd, const T& x, int deep){
+			return keys[deep]->testing(vd[deep], x);
+		}
+
+		bool compare(void** vd, T* x, int deep){
+			return keys[deep]->testing(vd[deep], x);
+		}
+
 		template<typename S>
-		bool compare(S s, const T& x, int deep){
-			S sx=s;
-			void* y=&sx;
+		bool compare(const T& x, const S& s, int deep){
+			void* y=&s;
+			return keys[deep]->testing(x, y);
+		}
+
+		template<typename S>
+		bool compare(const S& s, const T& x, int deep){
+			void* y=&s;
 			return keys[deep]->testing(y, x);
 		}
+
 		template<typename S>
-		bool compare(T* x, S s, int deep){
+		bool compare(T* x, const S& s, int deep){
 			return compare(*x, s, deep);
 		}
+
 		template<typename S>
-		bool compare(S s, T* x, int deep){
+		bool compare(const S& s, T* x, int deep){
 			return compare(s, *x, deep);
 		}
 
@@ -249,8 +243,11 @@ template<typename D, typename T, typename... Args>
 void mkKey(KeyCompound<D>& key, T t, Args... args) {
 	key.insertKey(t);
 	mkKey(key, args...);
-	
+
 }
 
+//####################################################################
+
+}
 
 #endif

@@ -1,24 +1,23 @@
 /*********************************************************************
 * Index class                                								*
 *                                                                    *
-* Version: 1.0                                                       *
-* Date:    09-11-2019                                                *
+* Version: 1.1                                                       *
+* Date:    16-07-202                                                 *
 * Author:  Dan Machado                                               *                                         *
 **********************************************************************/
 #ifndef INDEX_H
 #define INDEX_H
 
-#include<iostream>
-#include<list>
-
 #include "key.h"
 #include "node.h"
+#include "utility.h"
+#include "container.h"
 
-//####################################################################
+using namespace Allocator;
 
 namespace DM{
 
-
+//####################################################################
 //####################################################################
 
 template<typename T>
@@ -28,50 +27,52 @@ template<typename T>
 class Index
 {
 	typedef typename std::remove_pointer<T>::type TT;
+	typedef Node<TT*> NodeT;
 
 	private:
-		
 		enum LR{LEFT, RIGHT};
-		Node<T>* Node<T>::* branch[2]={&Node<T>::left, &Node<T>::right};
-		INDEX_TYPE isUnique;
-		bool deleteResource;
+		Node<TT*>* Node<TT*>::* branch[2]={&Node<TT*>::left, &Node<TT*>::right};
 		KeyCompound<TT> key;
+		INDEX_TYPE isUnique;
+		Node<TT*>* current_node;
+		TT* tmp_data;
+		static Container<T>* mallocator;
+		Int2Type<Is_Pointer<T>::is_pointer> int2type;
 
-		void balance(Node<T>* node, int diff);
+		void balance(Node<TT*>* node, int diff);
 
-		int insert(Node<T>* &, DataContainer<T>*, int);
+		int insert(Node<TT*>* &, int);
 
 		template<typename TA>
-		Node<T>* tFind(const TA& value, int mx=0);
+		Node<TT*>* tFind(const TA& value, int mx=0);
 
-		bool remove(Node<T>* node);
-
-		void deleting(Node<T>* node, bool recursive=true);
-
-		void dataDeletion(Node<T>* node);
+		void deleting(Node<TT*>* node);
 		
+		bool removeNode(Node<TT*>* node);
+
 	public:
-		Node<T>* Root;
+
+		bool load_data();
+
+		Node<TT*>* Root;
 		~Index();
 
 		template<typename S, typename... Args>
 		Index(INDEX_TYPE unique, S TT::* s, Args... args);
 
-		void print(Node<T>* root=nullptr)const;
+		static void set_allocator(Container<T>* _mallocator);
 
-		void noRemoveData();
+		void print(Node<TT*>* root=nullptr)const;
 
-		void insert(const T& value);
+		void insert(TT* val_ptr);
 
-		void insert(T&& value);
-
-		bool remove(const T& value);
-
-		template<typename S>
-		T findUnique(S value);
+		bool remove(TT* ptr);
 
 		template<class... Args>
-		T getUnique(Args... args);		
+		TT* getUnique(Args... args);
+		
+		template<class... Args>
+		Node<TT*>* find(Args... args);
 
 		TT* first();
 		TT* last();
@@ -87,45 +88,25 @@ class Index
 //====================================================================
 
 template<typename T>
-void Index<T>::dataDeletion(Node<T>* node){
-	if(deleteResource && node->data_cont){
-		TReF<TT> tRef(node->data_cont->data);
-		if(std::is_same<T,TT*>::value){
-			delete tRef();
-			delete node->data_cont;
-			node->data_cont=nullptr;
-			if(!isUnique){
-				auto it=node->storage->begin();
-				while(it!=node->storage->end()){
-					delete *it;
-					++it;
-				}
-				delete node->storage;
-			}
-		}
-	}
-	delete node;
+Container<T>* Index<T>::mallocator(nullptr);
+
+//====================================================================
+
+template<typename T>
+template<typename S, typename... Args>
+Index<T>::Index(INDEX_TYPE _unique, S TT::* s, Args... args)
+:Root(nullptr), isUnique(_unique), tmp_data(nullptr)
+{
+	mkKey(key, s, args...);
 }
 
 //====================================================================
 
 template<typename T>
-void Index<T>::deleting(Node<T>* node, bool recursive){
-
-	if(node){
-		Node<T>* tmp=node->right;
-		Node<T>* tmp2=node->left;
-		Node<T>* tmp3=node->down;
-
-		dataDeletion(node);
-
-		if(recursive){
-			deleting(tmp);
-			deleting(tmp2);
-			deleting(tmp3);
-		}
-	}
+void Index<T>::set_allocator(Container<T>* _mallocator){
+	mallocator=_mallocator;
 }
+
 //====================================================================
 
 template<typename T>
@@ -136,75 +117,84 @@ Index<T>::~Index(){
 //====================================================================
 
 template<typename T>
-void Index<T>::noRemoveData(){
-	deleteResource=false;
-}
+void Index<T>::deleting(Node<TT*>* node){
+	if(node){
+		Node<TT*>* tmp=node->right;
+		Node<TT*>* tmp2=node->left;
 
-//====================================================================
+		mallocator->free_node(node);
 
-template<typename T>
-template<typename S, typename... Args>
-Index<T>::Index(INDEX_TYPE _unique, S TT::* s, Args... args)
-	:Root(nullptr), isUnique(_unique), 
-		deleteResource(false){
-	if(std::is_same<T,TT*>::value){
-		deleteResource=true;
+		deleting(tmp);
+		deleting(tmp2);
 	}
-	
-	mkKey(key, s, args...);
 }
+
 
 //====================================================================
 
 template<typename T>
-void Index<T>::print(Node<T>* root)const{
-	std::list<Node<T>*> NL; 
-	std::list<Node<T>*> SBT; 
-	if(!root){
-		NL.push_back(Root);
+void Index<T>::insert(TT* val_ptr){
+	tmp_data=val_ptr;
+	if(Root){
+		insert(Root, 0);
 	}
 	else{
-		NL.push_back(root);
-	}
-
-	int s=0, height=0;
-	while(NL.size()){
-		auto it=NL.begin();
-		s=NL.size();
-		for(int i=0; i<s; i++){
-			if(*it){
-				std::cout<<*((*it)->data_cont->data)<<" : ";
-				NL.push_back((*it)->left);
-				NL.push_back((*it)->right);
-				if((*it)->down){
-					SBT.push_back((*it)->down);
-				}
-			}
-			else{
-				std::cout<<"NULL : ";
-			}
-			++it;
-			NL.pop_front();
-		}
-		height++;
-		std::cout<<"\n-----------------------------------------------"<<std::endl;
-	}
-	std::cout<<"\n+ + + + + + + + + + + + + + + + + + + + + + + + + + + + + + + +"<<std::endl;
-	
-	auto sit=SBT.begin();
-	s=SBT.size();
-	//std::cout<<s<<"<< size"<<std::endl;
-	for(int i=0; i<s; i++){
-		print(*sit);
-		++sit;
-		SBT.pop_front();
+		Root=mallocator->new_node(tmp_data, !isUnique);
 	}
 }
 
 //====================================================================
 
 template<typename T>
-void Index<T>::balance(Node<T>* node, int diff){
+int Index<T>::insert(Node<TT*>* &root,  int deep){
+	int x=1;
+	if(key.compare(tmp_data, root->data, deep)){
+		if(root->left){
+			x+=insert(root->left, deep);
+		}
+		else{
+			root->left=mallocator->new_node(tmp_data, !isUnique);		
+			root->left->top=root;
+		}
+	}
+	else if(key.compare(root->data, tmp_data, deep)){
+		if(root->right){
+			x+=insert(root->right, deep);
+		}
+		else{
+			root->right=mallocator->new_node(tmp_data, !isUnique);		
+			root->right->top=root;			
+		}
+	}
+	else{
+		if(++deep<key.length()){			
+			if(!root->down){
+				root->forkNode(mallocator->new_node(root->data, !isUnique));		
+			}
+			insert(root->down, deep);
+		}
+		else if(!isUnique){
+			(root->storage)->push_back(tmp_data);
+		}
+		else{
+			throw "Index is set as unique, duplicate key unable to insert element.";
+		}
+		return 0;
+	}
+
+	root->height=std::max(root->height, x);
+
+	int diff=root->diff();
+	if(std::abs(diff)>1){
+		balance(root, diff);
+	}
+	return root->height;
+}
+
+//====================================================================
+
+template<typename T>
+void Index<T>::balance(Node<TT*>* node, int diff){	
 	int lr, clr, ft;
 	if(diff>0){
 		lr=LR::LEFT;
@@ -217,14 +207,13 @@ void Index<T>::balance(Node<T>* node, int diff){
 		ft=-1;
 	}
 	
-	Node<T>* tmp=node->*branch[clr];
-	Node<T>* tmp2=tmp->*branch[lr];
+	Node<TT*>* tmp=node->*branch[clr];
+	Node<TT*>* tmp2=tmp->*branch[lr];
 
 	bool isRoot=(Root==node);
-	bool isRelRoot=(node->top==nullptr);
+	bool isRelRoot=(node->top==nullptr);// && node!=Root);
 
-	//Node<T>* tmpDown=nullptr;
-	Node<T>* tmpUp=nullptr;
+	Node<TT*>* tmpUp=nullptr;
 	if(isRelRoot){
 		if(node->up){
 			tmpUp=node->up;
@@ -293,6 +282,9 @@ void Index<T>::balance(Node<T>* node, int diff){
 	}
 	if(isRelRoot){
 		tmp2->up=tmpUp;
+		if(tmpUp){
+			tmpUp->data=tmp2->data;
+		}
 		if(!isRoot){
 			tmpUp->down=tmp2;
 		}
@@ -309,115 +301,28 @@ void Index<T>::balance(Node<T>* node, int diff){
 }
 
 //====================================================================
-
-template<typename T>
-int Index<T>::insert(Node<T>* &root, DataContainer<T>* tmp, int deep){
-	int x=1;
-	if(key.compare(tmp->data, root->data_cont->data, deep)){
-		if(root->left){
-			x+=insert(root->left, tmp, deep);
-		}
-		else{
-			Node<T>* node=new Node<T>(tmp, !isUnique);
-			root->left=node;
-			node->top=root;
-		}
-	}
-	else if(key.compare(root->data_cont->data, tmp->data, deep)){
-		if(root->right){
-			x+=insert(root->right, tmp, deep);
-		}
-		else{
-			Node<T>* node=new Node<T>(tmp, !isUnique);
-			root->right=node;
-			node->top=root;
-		}
-	}
-	else{
-		if(++deep<key.length()){
-			if(!root->down){
-				root->down=new Node<T>(root->data_cont, !isUnique);
-				root->down->up=root;
-			}
-			insert(root->down, tmp, deep);
-		}
-		else if(!isUnique){
-			(root->storage)->push_back(tmp->data);
-		}
-		else{
-			if(deleteResource){
-				TReF<TT> tRef(tmp->data);
-				if(std::is_same<T,TT*>::value){
-					delete tRef();
-					delete tmp;
-				}
-			}
-			throw "Index is set as unique, unable to insert duplicate key";
-		}
-		return 0;
-	}
-	
-	root->height=std::max(root->height, x);
-
-	int diff=root->diff();
-	if(std::abs(diff)>1){
-		balance(root, diff);
-	}
-	
-	return root->height;
-}
-
-//====================================================================
-
-template<typename T>
-void Index<T>::insert(const T& val){
-	DataContainer<T>* tmp=new DataContainer<T>(val);
-	if(Root){
-		insert(Root, tmp, 0);
-	}
-	else{
-		Root=new Node<T>(tmp, !isUnique);
-		
-	}
-}
-
-//====================================================================
-
-template<typename T>
-void Index<T>::insert(T&& val){
-	DataContainer<T>* tmp=new DataContainer<T>(std::move(val));
-	if(Root){
-		insert(Root, tmp, 0);
-	}
-	else{
-		Root=new Node<T>(tmp, !isUnique);
-		
-	}
-}
-
-//====================================================================
 /*
 If val is a partial key it will return the first result
 */
 //*
 template<typename T>
 template<typename TA>
-Node<T>* Index<T>::tFind(const TA& val, int mx){
+typename Index<T>::NodeT* Index<T>::tFind(const TA& val, int mx){
 	int limit=key.length();
 	if(mx && mx<limit){
 		limit=mx;
 	}
 	int deep=0;
-	Node<T>* tmp=Root;
+	Node<TT*>* tmp=Root;
 	while(tmp){
-		if(key.compare(val, tmp->data_cont->data, deep)) {
+		if(key.compare(val, tmp->data, deep)) {
 			tmp=tmp->left;
 		}
-		else if(key.compare(tmp->data_cont->data, val, deep)) {
+		else if(key.compare(tmp->data, val, deep)) {
 			tmp=tmp->right;
 		}
 		else{
-			if(tmp->down && ++deep<limit){
+			if(++deep<limit){
 				tmp=tmp->down;
 			}
 			else{
@@ -425,15 +330,13 @@ Node<T>* Index<T>::tFind(const TA& val, int mx){
 			}
 		}
 	}
-
 	return tmp;
 }
 
 //====================================================================
 
 template<typename T>
-bool Index<T>::remove(const T& value){
-	Node<T>* node=tFind(value);	
+bool Index<T>::removeNode(Node<TT*>* node){
 	if(!node){
 		return false;
 	}
@@ -459,22 +362,16 @@ bool Index<T>::remove(const T& value){
 		}
 	}
 	bool isRoot=(Root==node);
-	
-	Node<T>* tmp=nullptr;
-	Node<T>* tmp2=nullptr;
+	bool isRelroot=(node->top==nullptr);
 
-	if(!node->right && !node->left){
+	Node<TT*>* tmp=nullptr;
+	Node<TT*>* tmp2=nullptr;
+
+	if(!node->left && !node->right){
 		if(isRoot){
 			Root=nullptr;
-			delete node;
+			mallocator->free_node(node);
 			return true;
-		}
-
-		if(node->top->right==node){
-			node->top->right=nullptr;
-		}
-		else{
-			node->top->left=nullptr;
 		}
 		tmp=node->top;
 		tmp2=tmp;
@@ -512,10 +409,13 @@ bool Index<T>::remove(const T& value){
 			}
 		}
 	}
+
 	if(isRoot){
 		Root=tmp;
 	}
-	deleting(node, false);
+
+	mallocator->free_node(node);
+	mallocator->deallocate_node(node);
 
 	while(tmp2){
 		tmp2->updateHeight();
@@ -529,41 +429,107 @@ bool Index<T>::remove(const T& value){
 	return true;
 }
 
+//====================================================================
+
+template<typename T>
+bool Index<T>::remove(TT* ptr){
+	Node<TT*>* node=tFind(ptr);
+
+	Node<TT*>* ankor=nullptr;
+	if(node->left){
+		ankor=node->left;
+	}
+	else{
+		ankor=node->right;
+	}
+
+	Node<TT*>* tmpUp=nullptr;
+	if(node->up){
+		tmpUp=node->up;
+		node->up=nullptr;
+		tmpUp->down=nullptr;
+	}
+
+	Node<TT*>* tmpDown=nullptr;
+	if(node->down){
+		tmpDown=node->down;
+		node->down=nullptr;
+		tmpDown->up=nullptr;
+	}
+	
+	bool a=removeNode(node);
+	if(a){
+		if(ankor){
+			while(ankor->top){
+				ankor=ankor->top;
+			}
+			if(tmpUp){
+				ankor->up=tmpUp;
+				tmpUp->down=ankor;
+				while(tmpUp){
+					tmpUp->data=ankor->data;
+					tmpUp=tmpUp->up;
+				}
+			}
+			if(tmpDown){
+				ankor->down=tmpDown;
+				tmpDown->up=ankor;
+			}
+		}
+		else{
+			if(tmpUp && tmpDown){
+				tmpUp->down=tmpDown;
+				tmpDown->up=tmpUp;
+			}
+		}
+	}
+	
+	return a;
+}
+
 
 //====================================================================
 
 template<typename T>
 template<class... Args>
-T Index<T>::getUnique(Args... args){
-	auto ta=mkTuple(args...);
-	int x=std::tuple_size<tuple<Args...>>::value;
-
-	void** vta=TupleToArray(ta);
-	Node<T>* node=tFind(vta, x);
+typename Index<T>::TT* Index<T>::getUnique(Args... args){
+	Node<TT*>* node=find(std::forward<Args>(args)...);
 	if(!node){
 		throw "Value not found.";
 	}
+	return node->data;
+}
 
+//====================================================================
+
+template<typename T>
+template<class... Args>// values for the elements of the key
+Node<typename Index<T>::TT*>* Index<T>::find(Args... args){
+	auto ta=mkTuple(std::forward<Args>(args)...);
+	int x=std::tuple_size<tuple<Args...>>::value;
+
+	void** vta=TupleToArray(ta);
+	Node<TT*>* node=tFind(vta, x);
 	delete[] vta;
-	return node->data_cont->data;
+	return node;
 }
 
 //====================================================================
 
 template<typename T>
 typename Index<T>::TT* Index<T>::first(){
-	Node<T>* tmp=Root;
+	Node<TT*>* tmp=Root;
 	while(tmp->left){
 		tmp=tmp->left;
 	}
-	return tmp->data_cont->data;
+	return tmp->data;
 }
 
 //====================================================================		
 
 template<typename T>
 typename Index<T>::TT* Index<T>::last(){
-	Node<T>* tmp=Root;
+	Node<TT*>* tmp=Root;
 	while(1){
 		while(tmp->right){
 			tmp=tmp->right;
@@ -576,7 +542,7 @@ typename Index<T>::TT* Index<T>::last(){
 		}
 	}
 
-	return tmp->data_cont->data;
+	return tmp->data;
 }
 
 //====================================================================
@@ -595,6 +561,71 @@ int Index<T>::inKey(S TT::* ptr){
 }
 
 //====================================================================
+
+template<typename T>
+void Index<T>::print(Node<TT*>* root)const{
+	std::list<Node<TT*>*> NL; 
+	std::list<Node<TT*>*> SBT; 
+	if(!root){
+		NL.push_back(Root);
+	}
+	else{
+		NL.push_back(root);
+	}
+
+	int s=0, height=0;
+	while(NL.size()){
+		auto it=NL.begin();
+		s=NL.size();
+		for(int i=0; i<s; i++){
+			if(*it){
+				std::cout<<*((*it)->data)<<" : ";
+				NL.push_back((*it)->left);
+				NL.push_back((*it)->right);
+				if((*it)->down){
+					SBT.push_back((*it)->down);
+				}
+			}
+			else{
+				std::cout<<"NULL : ";
+			}
+			++it;
+			NL.pop_front();
+		}
+		height++;
+		std::cout<<"\n-----------------------------------------------"<<std::endl;
+	}
+	std::cout<<"\n\n+ + + + + + + + + + + + + + + + + + + + + + + + + + + + + + + +\n\n";
+	
+	auto sit=SBT.begin();
+	s=SBT.size();
+	//std::cout<<s<<"<< size"<<std::endl;
+	for(int i=0; i<s; i++){
+		print(*sit);
+		++sit;
+		SBT.pop_front();
+	}
+}
+
+
+//====================================================================
+
+template<typename T>
+bool Index<T>::load_data(){
+	try{
+		mallocator->apply_on([&](unsigned char* p_data)->void{
+			insert(mallocator->get_data(p_data, int2type));
+		});
+	}
+	catch(const char* msg){
+		std::cout<<msg<<std::endl;
+		return false;
+	}
+	return true;
+}
+
+//====================================================================
+
 
 }// END of namespace DM
 

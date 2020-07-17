@@ -446,12 +446,14 @@ class Query
 		
 		bool getBestIndex();
 		void executeQuery(ContainerWrapper<T>* results);
+		
+		Query()=delete;
+		Query<T>& operator=(const Query<T>&)=delete;
 
 	public:
 
-		~Query();
-
 		Query(DBTable<T>* multiIndex);
+		~Query();
 
 		/*
 		 * select elements that are less/greater (lsGt) than p
@@ -1032,15 +1034,24 @@ Query<T>& Query<T>::selectUsingFilter(S TT::* field, ExtFilter filter){
 template<typename T>
 bool Query<T>::getBestIndex(){
 	int k=0, mx=0, b=0;
+	int c=0, s=0, p=MAX_NUM_RULES;
 	for(int i=0; i<MIndex->indexesNames.size(); i++){
 		mx=0;
+		s=0;
+		c=0;
 		for(int j=0; j<MAX_NUM_RULES; j++){
 			if(rank[i][j]>-1){
 				mx++;
+				s+=j-c;
+				c=j;
 			}
 		}
 		if(b<mx){
 			b=mx;
+			k=i;
+		}
+		else if(b==mx && p>s){
+			p=s;
 			k=i;
 		}
 	}
@@ -1055,6 +1066,8 @@ bool Query<T>::getBestIndex(){
 		}
 		mx++;
 	}
+
+	//std::cout<<"using: "<<MIndex->indexesNames[k]<<"\n";
 
 	queryKey->sortKey(rank[k], mx);
 

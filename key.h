@@ -31,7 +31,7 @@ std::tuple<S, Args...> mkTuple(S s, Args... args){
 template<typename Tuple, std::size_t N, std::size_t B>
 struct TtoV
 {
-	static void test(void** vx, Tuple& tuple){
+	static void convert(void** vx, Tuple& tuple){
 		vx[N-1]=&std::get<N-1>(tuple);
 		TtoV<Tuple, N+1, B>::test(vx, tuple);
 	}
@@ -40,7 +40,7 @@ struct TtoV
 template<typename Tuple, std::size_t B>
 struct TtoV<Tuple, B, B>
 {
-	static void test(void** vx, Tuple& tuple){
+	static void convert(void** vx, Tuple& tuple){
 		vx[B-1]=&std::get<B-1>(tuple);
 	}
 };
@@ -49,7 +49,7 @@ template<typename Tuple>
 void** TupleToArray(Tuple& tuple)
 {
 	void** vx=new void*[std::tuple_size<Tuple>::value];
-	TtoV<Tuple, 1, std::tuple_size<Tuple>::value>::test(vx, tuple);
+	TtoV<Tuple, 1, std::tuple_size<Tuple>::value>::convert(vx, tuple);
 	return vx;
 }
 
@@ -72,6 +72,7 @@ template<typename T>
 class Keyx
 {
 	public:
+		
 		virtual bool testing(const T& x, const T& y)=0;
 		virtual bool testing(T*& x, T*& y)=0;
 
@@ -80,6 +81,7 @@ class Keyx
 
 		virtual bool testing(T*& x, void*& y)=0;
 		virtual bool testing(void*& y, T*& x)=0;
+		
 		virtual bool sameField(void* data)=0;
 };
 
@@ -90,6 +92,7 @@ class Keyx
 template<typename S, typename T>
 class KeyP : public Keyx<T>
 {
+	//typedef typename std::remove_pointer<T>::type TT;
 	typedef KeyP<S, T> KyP;
 	private:
 		S T::* field;
@@ -97,9 +100,6 @@ class KeyP : public Keyx<T>
 	public:
 		KeyP(S T::* _field)
 			:field(_field){}
-
-		KeyP(KeyP<S, T>& anotherKey)
-			:field(anotherKey.field){}
 
 		S T::* returnKey(){
 			return field;
@@ -142,6 +142,7 @@ class KeyP : public Keyx<T>
 template<typename T>
 class KeyCompound
 {
+	typedef typename std::remove_pointer<T>::type TT;
 	private:
 		static const int max_tests=40;
 		Keyx<T>* keys[max_tests];
@@ -215,20 +216,23 @@ class KeyCompound
 		}
 
 		template<typename S>
-		int inKey(S T::* ptr){
-			KeyP<S, T>* tts=new KeyP<S, T>(ptr);
-			void* tt=tts;
-			int j=-1;
-			for(int i=0; i<count; i++){
-				if(keys[i]->sameField(tt)){
-					j=i;
-				}
-			}
-			delete tts;
-			return j;
-		}
-
+		int inKey(S T::* ptr);
 };
+
+template<typename T>
+template<typename S>
+int KeyCompound<T>::inKey(S T::* ptr){
+	KeyP<S, T>* tts=new KeyP<S, T>(ptr);
+	void* tt=tts;
+	int j=-1;
+	for(int i=0; i<count; i++){
+		if(keys[i]->sameField(tt)){
+			j=i;
+		}
+	}
+	delete tts;
+	return j;
+}
 
 //====================================================================
 

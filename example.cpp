@@ -27,7 +27,7 @@ int main(){
 	fromFile("Data/films", [&TBfilms](std::vector<std::string> data)->void{
 		static bool a=false;
 		if(a && data.size()==7){
-			TBfilms.insert(stoi(data[0]), stoi(data[1]), data[2], stoi(data[3]), stoi(data[4]), stoi(data[5]), stoi(data[6]));   
+			TBfilms.emplace(stoi(data[0]), stoi(data[1]), data[2], stoi(data[3]), stoi(data[4]), stoi(data[5]), stoi(data[6]));   
 		}
 		a=true;
 	});
@@ -35,7 +35,7 @@ int main(){
 	DBTable<Director> TBdirectors;
 	TBdirectors.registerIndex("byId", DM::INDEX_TYPE::UNIQUE, &Director::id);
 	fromFile("Data/directors", [&TBdirectors](std::vector<std::string> data)->void{
-		 TBdirectors.insert(stoi(data[0]), data[1]);
+		 TBdirectors.emplace(stoi(data[0]), data[1]);
 	});
 
 
@@ -66,7 +66,7 @@ int main(){
 	TBcountries.registerIndex("byId", DM::INDEX_TYPE::UNIQUE, &Country::id);
 	TBcountries.registerIndex("byName", DM::INDEX_TYPE::UNIQUE, &Country::name);
 	fromFile("Data/countries", [&TBcountries](std::vector<std::string> data)->void{
-		TBcountries.insert(stoi(data[0]), data[1]);   
+		TBcountries.emplace(stoi(data[0]), data[1]);   
 	});
 
 	Query<Country> queryCountries(&TBcountries);
@@ -124,7 +124,7 @@ int main(){
 	//load data for Genres
 	fromFile("Data/genres", [&TBgenre](std::vector<std::string> data)->void{
 		if(data.size()>1){
-			TBgenre.insert(stoi(data[0]), std::string(data[1]));
+			TBgenre.emplace(stoi(data[0]), std::string(data[1]));
 		}
 	});
 
@@ -133,7 +133,7 @@ int main(){
 	fromFile("Data/film_genres", [&TBgenreF](std::vector<std::string> data)->void{
 		static bool a=false;
 		if(a){
-			TBgenreF.insert(stoi(data[0]), stoi(data[1]));
+			TBgenreF.emplace(stoi(data[0]), stoi(data[1]));
 		}
 		a=true;
 	});

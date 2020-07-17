@@ -31,9 +31,12 @@ class DBTable
 		std::vector<Index<T>*> Indexes;
 		int indexExist(std::string indexName);
 
+		DBTable<T>& operator =(const DBTable<T>&)=delete;
+
 	public:
-		~DBTable();
 		DBTable();
+		~DBTable();
+
 		template<typename... Args>
 		bool registerIndex(std::string indexName, INDEX_TYPE isUnique, Args... args);
 
@@ -41,8 +44,12 @@ class DBTable
 
 		void clear();
 
+		// implement this properly
+		void insert(const TT&);
+		void insert(TT*);
+		
 		template<typename... Args>
-		void insert(Args&& ...args);
+		void emplace(Args&& ...args);
 
 		Query<T> mkQuery();
 
@@ -128,7 +135,7 @@ bool DBTable<T>::registerIndex(std::string name, INDEX_TYPE isUnique, Args... ar
 
 template<typename T>
 template<typename... Args>
-void DBTable<T>::insert(Args&& ...args){
+void DBTable<T>::emplace(Args&& ...args){
 	TT* ptr=Records.insert(std::forward<Args>(args)...);
 	int a=0;
 	int last=0;	

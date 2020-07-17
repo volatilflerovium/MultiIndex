@@ -49,18 +49,25 @@ class Index
 		void deleting(Node<TT*>* node);
 		
 		bool removeNode(Node<TT*>* node);
+		
+		Node<TT*>* Root;
+
+		template<typename S>
+		int inKey(S TT::* ptr);
+
+		Index<T>()=delete;
+		Index<T>& operator=(const Index<T>&)=delete;
 
 	public:
-
-		bool load_data();
-
-		Node<TT*>* Root;
-		~Index();
 
 		template<typename S, typename... Args>
 		Index(INDEX_TYPE unique, S TT::* s, Args... args);
 
+		~Index();
+
 		static void set_allocator(Container<T>* _mallocator);
+
+		bool load_data();
 
 		void print(Node<TT*>* root=nullptr)const;
 
@@ -76,9 +83,6 @@ class Index
 
 		TT* first();
 		TT* last();
-
-		template<typename S>
-		int inKey(S TT::* ptr);
 
 		int getKeySize()const;
 		
@@ -128,7 +132,6 @@ void Index<T>::deleting(Node<TT*>* node){
 		deleting(tmp2);
 	}
 }
-
 
 //====================================================================
 
@@ -505,11 +508,10 @@ typename Index<T>::TT* Index<T>::getUnique(Args... args){
 template<typename T>
 template<class... Args>// values for the elements of the key
 Node<typename Index<T>::TT*>* Index<T>::find(Args... args){
-	auto ta=mkTuple(std::forward<Args>(args)...);
-	int x=std::tuple_size<tuple<Args...>>::value;
+	std::tuple<Args...> ta=mkTuple(std::forward<Args>(args)...);
 
 	void** vta=TupleToArray(ta);
-	Node<TT*>* node=tFind(vta, x);
+	Node<TT*>* node=tFind(vta, std::tuple_size<tuple<Args...>>::value);
 	delete[] vta;
 	return node;
 }
